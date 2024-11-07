@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>設備用電量趨勢</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        canvas {
+            max-width: 800px;
+            margin: 20px auto;
+        }
+        #chart-container {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        #summary {
+            text-align: center;
+            margin: 20px;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="file-input" accept=".csv">
+    <div id="summary">
+        <p>三麟印刷碳排監控系統總用電量: <span id="total-electricity"></span> kWh</p>
+        <p>三麟印刷碳排監控系總碳排放量: <span id="total-emissions"></span> kg CO₂</p>
+    </div>
+    <div id="chart-container">
+        <canvas id="trendChart"></canvas>
+        <canvas id="totalBarChart"></canvas>
+        <canvas id="carbonEmissionsChart"></canvas>
+    </div>
+
+    <script>
+        document.getElementById('file-input').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                Papa.parse(file, {
+                    header: true,
+                    complete: function(results) {
+                        console.log("Finished:", results);
+                        
+                        const data = results.data;
+                        const labels = data.map(row => row.日期); // 獲取日期作為標籤
+                        const equipmentNames = Object.keys(results.data[0]).slice(1); // 獲取設備名稱
+                        const datasets = equipmentNames.map((name, index) => {
+                            return {
+                                label: name,
+                                data: data.map(row => parseFloat(row[name]) || 0), // 獲取每個設備的用電量
+                                borderColor: `hsl(${(index * 360 / equipmentNames.length)}, 100%, 50%)`, // 使用不同顏色
+                                fill: false,
+                                tension: 0.1 // 線條的平滑程度
+                            };
+                        });
+
+                        // 繪製趨勢圖
+                        const trendCtx = document.getElementById('trendChart').getContext('2d');
+                        new Chart(trendCtx, {
+                            type: 'line',
+                            data: {
+                                labels: labels,
+                                datasets: datasets
+                            },
+                            options: {
+                                responsive: true,
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        title: {
+                                            display: true,
+                                            text: '用電量 (kWh)'
+                                        }
+                                    },
+                                    x: {
+                                        title: {
+                                            display: true,
+                                            text: '日期'
+                                        }
+                                    }
+                                },
+                                plugins: {
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(tooltipItem) {
+                                                const equipment = tooltipItem.dataset.label;
+                                                const date = tooltipItem.label;
+                                                const value = tooltipItem.raw;
+                                                return `${equipment}: ${value} kWh (日期: ${date})`;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        // 計算每個設備的總用電量
+                        const totalElectricity = Array(equipmentNames.length).fill(0);
+                        const totalEmissions = Array(equipmentNames.length).fill(0); // 碳排放量計算
+                        data.forEach(row => {
+                            equipmentNames.forEach((name, index) => {
+                                const electricity = parseFloat(row[name]) || 0;
+                                totalElectricity[index] += electricity;
+                                // 假設每個 kWh 的碳排放為 0.5 kg CO₂
+                                totalEmissions[index] += electricity * 0.5; // 計算碳排放
+                            });
+                        });
+
+                        // 總用電量和總碳排放量的顯示
+                        const totalElectricitySum = totalElectricity.reduce((a, b) => a + b, 0);
+                        const totalEmissionsSum = totalEmissions.reduce((a, b) => a + b, 0);
+                        document.getElementById('total-electricity').innerText = totalElectricitySum.toFixed(2);
+                        document.getElementById('total-emissions').innerText = totalEmissionsSum.toFixed(2);
+
+                        // 繪製總用電量的直方圖
+                        const totalBarCtx = document.getElementById('totalBarChart').getContext('2d');
+                        new Chart(totalBarCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: equipmentNames,
+                                datasets: [{
+                                    label: '各設備總用電量 (kWh)',
+                                    data: totalElectricity,
+                                    backgroundColor: datasets.map(d => d.borderColor),
+                                    borderColor: datasets.map(d => d.borderColor.replace('50%', '70%')), // 增加邊框顏色
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        title: {
+                                            display: true,
+                                            text: '用電量 (kWh)'
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        // 繪製碳排放量的圖表
+                        const carbonEmissionsCtx = document.getElementById('carbonEmissionsChart').getContext('2d');
+                        new Chart(carbonEmissionsCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: equipmentNames,
+                                datasets: [{
+                                    label: '各設備碳排放量 (kg CO₂)',
+                                    data: totalEmissions,
+                                    backgroundColor: datasets.map(d => d.borderColor),
+                                    borderColor: datasets.map(d => d.borderColor.replace('50%', '70%')),
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        title: {
+                                            display: true,
+                                            text: '碳排放量 (kg CO₂)'
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    },
+                    error: function(error) {
+                        console.error("Error:", error);
+                    }
+                });
+            } else {
+                console.error("No file selected");
+            }
+        });
+    </script>
+</body>
+</html>
