@@ -7,9 +7,21 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        body {
+            background-image: url('https://github.com/Sethjesus/Photo/raw/main/Green%20office.jpg');
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            background-position: center;
+            color: #333;
+            font-family: Arial, sans-serif;
+        }
         canvas {
             max-width: 800px;
             margin: 20px auto;
+            background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent background for readability */
+            padding: 20px;
+            border-radius: 10px;
         }
         #chart-container {
             display: flex;
@@ -20,6 +32,9 @@
             text-align: center;
             margin: 20px;
             font-size: 1.2em;
+            background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent for readability */
+            padding: 10px;
+            border-radius: 10px;
         }
     </style>
 </head>
@@ -42,45 +57,43 @@
                 Papa.parse(file, {
                     header: true,
                     complete: function(results) {
-                        console.log("Finished:", results);
-                        
+                        console.log("CSV Parsing Results:", results);
+
                         const data = results.data;
-                        const labels = data.map(row => row.日期); // 獲取日期作為標籤
-                        const equipmentNames = Object.keys(results.data[0]).slice(1); // 獲取設備名稱
+                        if (data.length === 0) {
+                            console.error("No data found in CSV");
+                            return;
+                        }
+
+                        const labels = data.map(row => row['日期']);
+                        console.log("Labels (Dates):", labels);
+
+                        // Extract equipment names
+                        const equipmentNames = Object.keys(data[0]).slice(1);
+                        console.log("Equipment Names:", equipmentNames);
+
                         const datasets = equipmentNames.map((name, index) => {
+                            const datasetData = data.map(row => parseFloat(row[name]) || 0);
+                            console.log(`Data for ${name}:`, datasetData);
                             return {
                                 label: name,
-                                data: data.map(row => parseFloat(row[name]) || 0), // 獲取每個設備的用電量
-                                borderColor: `hsl(${(index * 360 / equipmentNames.length)}, 100%, 50%)`, // 使用不同顏色
+                                data: datasetData,
+                                borderColor: `hsl(${(index * 360 / equipmentNames.length)}, 100%, 50%)`,
                                 fill: false,
-                                tension: 0.1 // 線條的平滑程度
+                                tension: 0.1
                             };
                         });
 
-                        // 繪製趨勢圖
+                        // Render trend chart
                         const trendCtx = document.getElementById('trendChart').getContext('2d');
                         new Chart(trendCtx, {
                             type: 'line',
-                            data: {
-                                labels: labels,
-                                datasets: datasets
-                            },
+                            data: { labels: labels, datasets: datasets },
                             options: {
                                 responsive: true,
                                 scales: {
-                                    y: {
-                                        beginAtZero: true,
-                                        title: {
-                                            display: true,
-                                            text: '用電量 (kWh)'
-                                        }
-                                    },
-                                    x: {
-                                        title: {
-                                            display: true,
-                                            text: '日期'
-                                        }
-                                    }
+                                    y: { beginAtZero: true, title: { display: true, text: '用電量 (kWh)' } },
+                                    x: { title: { display: true, text: '日期' } }
                                 },
                                 plugins: {
                                     tooltip: {
@@ -97,82 +110,51 @@
                             }
                         });
 
-                        // 計算每個設備的總用電量
+                        // Calculate total electricity and emissions
                         const totalElectricity = Array(equipmentNames.length).fill(0);
-                        const totalEmissions = Array(equipmentNames.length).fill(0); // 碳排放量計算
+                        const totalEmissions = Array(equipmentNames.length).fill(0);
                         data.forEach(row => {
                             equipmentNames.forEach((name, index) => {
                                 const electricity = parseFloat(row[name]) || 0;
                                 totalElectricity[index] += electricity;
-                                // 假設每個 kWh 的碳排放為 0.5 kg CO₂
-                                totalEmissions[index] += electricity * 0.5; // 計算碳排放
+                                totalEmissions[index] += electricity * 0.5; // Assuming each kWh is 0.5 kg CO₂
                             });
                         });
 
-                        // 總用電量和總碳排放量的顯示
+                        // Display total electricity and emissions
                         const totalElectricitySum = totalElectricity.reduce((a, b) => a + b, 0);
                         const totalEmissionsSum = totalEmissions.reduce((a, b) => a + b, 0);
                         document.getElementById('total-electricity').innerText = totalElectricitySum.toFixed(2);
                         document.getElementById('total-emissions').innerText = totalEmissionsSum.toFixed(2);
 
-                        // 繪製總用電量的直方圖
+                        // Render total electricity bar chart
                         const totalBarCtx = document.getElementById('totalBarChart').getContext('2d');
                         new Chart(totalBarCtx, {
                             type: 'bar',
-                            data: {
-                                labels: equipmentNames,
-                                datasets: [{
-                                    label: '各設備總用電量 (kWh)',
-                                    data: totalElectricity,
-                                    backgroundColor: datasets.map(d => d.borderColor),
-                                    borderColor: datasets.map(d => d.borderColor.replace('50%', '70%')), // 增加邊框顏色
-                                    borderWidth: 1
-                                }]
-                            },
+                            data: { labels: equipmentNames, datasets: [{ label: '各設備總用電量 (kWh)', data: totalElectricity, backgroundColor: datasets.map(d => d.borderColor) }] },
                             options: {
                                 responsive: true,
                                 scales: {
-                                    y: {
-                                        beginAtZero: true,
-                                        title: {
-                                            display: true,
-                                            text: '用電量 (kWh)'
-                                        }
-                                    }
+                                    y: { beginAtZero: true, title: { display: true, text: '用電量 (kWh)' } }
                                 }
                             }
                         });
 
-                        // 繪製碳排放量的圖表
+                        // Render carbon emissions chart
                         const carbonEmissionsCtx = document.getElementById('carbonEmissionsChart').getContext('2d');
                         new Chart(carbonEmissionsCtx, {
                             type: 'bar',
-                            data: {
-                                labels: equipmentNames,
-                                datasets: [{
-                                    label: '各設備碳排放量 (kg CO₂)',
-                                    data: totalEmissions,
-                                    backgroundColor: datasets.map(d => d.borderColor),
-                                    borderColor: datasets.map(d => d.borderColor.replace('50%', '70%')),
-                                    borderWidth: 1
-                                }]
-                            },
+                            data: { labels: equipmentNames, datasets: [{ label: '各設備碳排放量 (kg CO₂)', data: totalEmissions, backgroundColor: datasets.map(d => d.borderColor) }] },
                             options: {
                                 responsive: true,
                                 scales: {
-                                    y: {
-                                        beginAtZero: true,
-                                        title: {
-                                            display: true,
-                                            text: '碳排放量 (kg CO₂)'
-                                        }
-                                    }
+                                    y: { beginAtZero: true, title: { display: true, text: '碳排放量 (kg CO₂)' } }
                                 }
                             }
                         });
                     },
                     error: function(error) {
-                        console.error("Error:", error);
+                        console.error("Error Parsing CSV:", error);
                     }
                 });
             } else {
